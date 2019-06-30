@@ -1,17 +1,12 @@
 /*
  * Ultima Atualização-----------------
- * Data: 21/06/19
- * Hora: 21h29m
+ * Data: 30/06/19
+ * Hora: 15h16m
  * Por: Raphael
  * Implementado:
- *  - Alterado funções de Detecção de Borda
- * 	  para funcinar com mais de um botão
- *  - Criada funções específicas para escrever
- * 	  data e hora no display.
- *  - Criada função para definir valores de uma
- * 	  struct do tipo Relogio (necessário uma
- * 	  alteração para salvar em outra struct além
- *    da "Atual", será feito na próxima versão)
+ *  - Upload feito no GitHub 
+ * (https://github.com/raphera/RelogioDigital_8051)
+ *  - Ambiente de desenvolvimento online preparado.
  * */
 
 #include <8051.h>
