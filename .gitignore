@@ -1,5 +1,4 @@
-### Sdcc ###
-# SDCC stuff
+### SDCC ###
 *.lnk
 *.lst
 *.map
@@ -11,3 +10,4 @@ build/
 
 ### IDE ###
 *.manifest
+.git/
