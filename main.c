@@ -1,20 +1,21 @@
 /*
- * Ultima Atualização-----------------
- * Data: 30/06/19
- * Hora: 15h16m
+ * Ultima Atualização-------------------
+ * Data: 30/06/2019
+ * Hora: 18h29m
  * Por: Raphael
  * Implementado:
- *  - Upload feito no GitHub 
- * (https://github.com/raphera/RelogioDigital_8051)
- *  - Ambiente de desenvolvimento online preparado.
+ *  - Melhoria dos comentários no código;
+ *  - Implementada função para mostrar
+ *    data e ano sem alterar dados salvos.
  * */
 
 #include <8051.h>
 
-// Configuracoes
+/* Configurações personalizadas do programa */
 #define MAX_ALARMS 10
+#define DELAY_WR_DISP 1 // Kit -> 5 | Proteus -> 1
 
-// Portas Externas
+/* Endereços das protas externas */
 #define DISP7S 0xFFC0
 #define DISP7S_SLT 0xFFC1
 #define KEYBOARD 0xFFC3
@@ -25,12 +26,6 @@
 #define DISPLAY_DR 0xFFD2
 #define DISPLAY_BF 0xFFE2
 #define DISPLAY_R 0xFFF2
-
-// Enderecos 7seg
-#define DISP1 0x08
-#define DISP2 0x04
-#define DISP3 0x02
-#define DISP4 0x01
 
 // Valores retornados pelas teclas do teclado
 // Linha 1
@@ -54,8 +49,19 @@
 #define TE 0x4000 // AD7 & ACH16 - CH16
 #define TD 0x8000 // AD7 & ACH17 - CH17
 
+/* Variáveis de controle do Buzzer */
+	__xdata unsigned int tmp;
+	unsigned char __far __at DAC amost;
+
+/* Variável utilizada para fazer o controle
+  // de quantas vezes a função Timer0_ISR: foi
+  chamada; */
 unsigned int usecCounter = 0;
 
+/* Vetor contendo os bits (em hex) para
+  acender os segmentos de acordo com o
+  caractere (atrelado ao indice do
+  vetor).*/
 __code unsigned char num_sete_seg[] = {
     0x3F, // 0
     0x06, // 1
@@ -71,6 +77,8 @@ __code unsigned char num_sete_seg[] = {
     0x40  // -
 };
 
+/* Vetor com o endereço de cada display
+  de 7 segmentos. */
 __code unsigned char num_disp[] = {
     0x00, // Valor para adequar a funcao
     0x08, // Display 1
@@ -79,6 +87,7 @@ __code unsigned char num_disp[] = {
     0x01  // Display 4
 };
 
+/* Struct com dados básicos do Relógio */
 struct Relogio {
   unsigned char Hora;
   unsigned char Minuto;
@@ -89,13 +98,15 @@ struct Relogio {
   unsigned int Ano;
 };
 
-__xdata struct Relogio Def;
-struct Relogio Atual;
-__xdata struct Relogio Alarme[MAX_ALARMS];
+__xdata struct Relogio
+    Def; // Struct definida apenas para trabalhar com função de definição
+struct Relogio
+    Atual; // Strcuct utilizada apenas para o mostrador (mostra os dados atuais)
+__xdata struct Relogio
+    Alarme[MAX_ALARMS]; // Vetor de Structs contendo todos os alarmes.
 
 /* Struct Criada para trabalhar junto com a função Borda_Subida(),
- * pois cada botão precisa de sua variável Aux.
- * */
+  pois cada botão precisa de sua variável Aux. */
 struct AuxB {
   unsigned char B0;
   unsigned char B1;
@@ -117,19 +128,17 @@ struct AuxB {
 
 struct AuxB AuxB;
 
-//__bit Aux = 0;
-
 __bit Pisca500ms;
 
-// Variavel que seta alarmes ativos
+// Vetor que que define cada alarme como ativo ou inativo
 unsigned char Alarme_en[MAX_ALARMS];
+// Variável que define se há pelo menos um alarme tocando no momento
 signed char Alarme_tocando;
 
-// Ajuste[0] define se todos acesos quando = 1, ou todos apagados quando = 0
-// Ajuste[1] ... Ajuste[4] define cada um se aceso ou apagado SOMENTE QUANDO
-// Ajuste[0] == 1
+// Vetor para definir cada display se está aceso ou apagado
 unsigned char Ajuste[5];
 
+/* Conjunto de variáveis do tipo __bit que definem aperto de um botão */
 __bit Tecla0;
 __bit Tecla1;
 __bit Tecla2;
@@ -147,6 +156,8 @@ __bit TeclaD;
 __bit TeclaE;
 __bit TeclaF;
 
+/* Função implementada para atraso de máquina de acordo com argumento
+  em ms (milissegundos) passado ao chamar função. */
 void Delay(unsigned int Tempo) {
   unsigned int x;
   while (Tempo-- > 0) {
@@ -155,7 +166,8 @@ void Delay(unsigned int Tempo) {
   }
 }
 
-// Verifica se o ano setado e bissexto
+/* Função que verifica que ano é bissexto retornando 1 para bissexto
+  ou 0 para não bissexto. */
 unsigned char Bissexto(unsigned char Ano) {
   unsigned char Resultado;
   if (((Ano % 4 == 0) && (Ano % 100 != 0)) ||
@@ -167,7 +179,8 @@ unsigned char Bissexto(unsigned char Ano) {
   return Resultado;
 }
 
-// Verifica o numero de dias que o mes setado possui
+/* Verifica a quantidade de dias que o mês possui de acordo com argumentos Ano
+  e Mês passados no argumento. */
 unsigned char DiaMax(unsigned char Mes, unsigned char Ano) {
   unsigned char Resultado;
   if (Mes == 4 | Mes == 6 | Mes == 9 | Mes == 11) {
@@ -182,7 +195,10 @@ unsigned char DiaMax(unsigned char Mes, unsigned char Ano) {
   return Resultado;
 }
 
-// Faz a varredura dos alarmes procurando um para tocar
+/* Faz varredura no vetor de alarmes (Alarme[MAX_ALARMS]) procurando por alarme
+  compatível com tempo atual, caso tenha algum, seta variável alarme tocando com
+  indice do vetor que corresponde ao alarme + 1 (ajuste de indice para
+  utilização no display). */
 void alarme_verif() {
   Alarme_tocando = 0;
   for (char i = 0; i < MAX_ALARMS; i++) {
@@ -198,7 +214,8 @@ void alarme_verif() {
   }
 }
 
-// Alterado nome da função para diferenciar do nome da struct - Raphael
+/* Função chamada a cada ciclo da interrupção e cuida de fazer a atuliazação
+  da Struct Atual, Struct essa que armazena os valores de tempo atuais. */
 void Relogio_upd(void) {
   if (Atual.MSegundo < 999) {
     Atual.MSegundo++;
@@ -233,7 +250,8 @@ void Relogio_upd(void) {
   }
 }
 
-// Atualizada em 20.06.19 para melhorar consumo do processador - Raphael
+/* Função utilizada para controle dos displays de 7 segmentos, acende
+  os segmentos do display e/ou ponto de acordo com os argumentos passados. */
 void Escreve7Seg(__bit Liga, __bit Ponto, unsigned char Posicao,
                  unsigned char Digito) {
   static unsigned char __far __at DISP7S D7Seg;
@@ -245,13 +263,13 @@ void Escreve7Seg(__bit Liga, __bit Ponto, unsigned char Posicao,
   D7Seg = (num_sete_seg[Digito] | (0x80 * Ponto)) & (0xFF * Liga);
 }
 
-void InitTimer0(void) {
+/* Função que define as opções o timer do microcontrolador */
+void InitTimer(void) {
 
-  TMOD &= 0xF0; // Limpa o espaco do bit0 ao bit3 referente ao timer0
-  TMOD |= 0x02; // Setar Timer0 em modo 2 (recarrega valor inicial)
-
-  TH0 = 0x1A; // Tempo de recarregar de 250us
-  TL0 = 0x1A; // Valor de inicio
+  TMOD = 0b00000010; // Setar Timer0 em modo 2 (recarrega valor inicial)
+  PT0 = 1;    //Timer0 com prioridade alta
+  TH0 = 6; // Tempo de recarregar de 250us
+  TL0 = 6; // Valor de inicio
 
   ET0 = 1; // Ativa as interrupcoes do Timer 0
   EA = 1;  // Ativa a interrupcao global
@@ -259,7 +277,8 @@ void InitTimer0(void) {
   TR0 = 1; // Inicia o Timer 0
 }
 
-// Funcao chamada a cada 250us
+/* Função chamada pela interrupção do microcontrolador de acordo com
+  as opções definidas na função InitTimer0. */
 void Timer0_ISR(void) __interrupt 1 {
   TF0 = 0;              // Limpa o flag de interrupcao
   usecCounter++;        // Proporcao de 1 - 250us
@@ -270,6 +289,8 @@ void Timer0_ISR(void) __interrupt 1 {
   }
 }
 
+/* Função faz varredura nos buffers do teclado procurando por teclas que
+  foram pressionadas e retorna interiro com resultado. */
 unsigned int Tecla(void) {
   static unsigned char __far __at KEYBOARD Teclado;
   unsigned char T123A456B;
@@ -288,8 +309,9 @@ unsigned int Tecla(void) {
   return Resultado;
 }
 
-// Detecta Borda de Subida do sinal de entrada
-// Alterada para receber argumento como ponteiro (*). Raphael - 21/06/19
+/* Detecta borda de subida no sinal de entrada, função utilizada
+  variável única para cada sinal a ser definida no argumento junto
+  com a entrada do sinal. */
 __bit Borda_Subida(__bit Entrada, unsigned char *Aux) {
   __bit Borda = 0;
   if (Entrada != (*Aux)) {
@@ -305,8 +327,9 @@ __bit Borda_Subida(__bit Entrada, unsigned char *Aux) {
   return Borda;
 }
 
-// Funcao para verificar teclas
-// Alterada para também retornar qual tecla foi pressionada.
+/* Função que decompõe valor retornado pela função Tecla() e nos respectivos
+  bits das teclas (Tela0, Tecla1, ..., TeclaF) e também retorna qual tecla foi
+  pressionada (apenas uma com prioridade TeclaF > Tecla0). */
 signed char verif_teclas() {
   signed char retorno = -1;
 
@@ -330,40 +353,41 @@ signed char verif_teclas() {
   return retorno;
 }
 
-// Funcao que faz a escrita da hora no display passando o endereco da struct
-// como argumento
+/* Função faz a escrita da hora no display passando a Struct desejada
+  no argumento. */
 void escreve_hora(struct Relogio *mostrar) {
   Escreve7Seg(Ajuste[1], 0, 1, mostrar->Minuto % 10);
-  Delay(1);
+  Delay(DELAY_WR_DISP);
   Escreve7Seg(Ajuste[2], 0, 2, mostrar->Minuto / 10);
-  Delay(1);
+  Delay(DELAY_WR_DISP);
   Escreve7Seg(Ajuste[3], Pisca500ms, 3, mostrar->Hora % 10);
-  Delay(1);
+  Delay(DELAY_WR_DISP);
   Escreve7Seg(Ajuste[4], 0, 4, mostrar->Hora / 10);
-  Delay(1);
+  Delay(DELAY_WR_DISP);
 }
 
-// Funcao que faz a escrita da data no display passando o endereco da struct
-// como argumento
+/* Função faz a escrita da data no display passando a Struct desejada
+  no argumento e definindo argumento ano como 0, e escreve ano ao
+  definir atumento ano como 1. */
 void escreve_data(struct Relogio *mostrar, __bit ano) {
   if (ano) {
     Escreve7Seg(Ajuste[1], 0, 1, (((mostrar->Ano) % 1000) % 100) % 10);
-    Delay(1);
+    Delay(DELAY_WR_DISP);
     Escreve7Seg(Ajuste[2], 0, 2, (((mostrar->Ano) % 1000) % 100) / 10);
-    Delay(1);
+    Delay(DELAY_WR_DISP);
     Escreve7Seg(Ajuste[3], 0, 3, (((mostrar->Ano) % 1000) / 100));
-    Delay(1);
+    Delay(DELAY_WR_DISP);
     Escreve7Seg(Ajuste[4], 0, 4, (mostrar->Ano) / 1000);
-    Delay(1);
+    Delay(DELAY_WR_DISP);
   } else {
     Escreve7Seg(Ajuste[1], 0, 1, mostrar->Mes % 10);
-    Delay(1);
+    Delay(DELAY_WR_DISP);
     Escreve7Seg(Ajuste[2], 0, 2, mostrar->Mes / 10);
-    Delay(1);
+    Delay(DELAY_WR_DISP);
     Escreve7Seg(Ajuste[3], 1, 3, mostrar->Dia % 10);
-    Delay(1);
+    Delay(DELAY_WR_DISP);
     Escreve7Seg(Ajuste[4], 0, 4, mostrar->Dia / 10);
-    Delay(1);
+    Delay(DELAY_WR_DISP);
   }
 }
 
@@ -584,17 +608,20 @@ void def(unsigned char inicial, struct Relogio *final) {
   (*final) = Def;
 }
 
+/* Função faz a escrita do menu de alarme no display passando os
+  argumentos de indice e ativo. */
 void menu_alarme(unsigned char alarme, __bit ativo) {
   Escreve7Seg(Ajuste[1], ativo, 1, alarme % 10);
-  Delay(1);
+  Delay(DELAY_WR_DISP);
   Escreve7Seg(Ajuste[2], ativo, 2, alarme / 10);
-  Delay(1);
+  Delay(DELAY_WR_DISP);
   Escreve7Seg(Ajuste[3], 0, 3, 11);
-  Delay(1);
+  Delay(DELAY_WR_DISP);
   Escreve7Seg(Ajuste[4], 0, 4, 10);
-  Delay(1);
+  Delay(DELAY_WR_DISP);
 }
 
+/* Função que gera e faz o controle do menu dos alarmes */
 void alarme() {
   signed char tecla_ap = -1;
   unsigned char alarm_at = 1;
@@ -626,16 +653,59 @@ void alarme() {
   def(2, &Alarme[alarm_at - 1]);
 }
 
+/* Função para mostrar a data no Display, ao ser chamada mostra
+  primeiramente o ano, apos pressionar a teclaC mostra dia e mês
+  pressionando mais uma vez sai da função. */
+void data(struct Relogio *atual) {
+  // Ativa todos os 4 displays
+  Ajuste[1] = Ajuste[2] = Ajuste[3] = Ajuste[4] = 1;
+
+  // ------Ano------
+  while (!Borda_Subida(TeclaC, &AuxB.BC)) {
+    // Escreve no Display
+    escreve_data(atual, 1);
+
+    // Faz varredura nas teclas apertadas
+    verif_teclas();
+  }
+  //------Fim do ano------
+
+  // -------Dia/Mes-------
+  while (!Borda_Subida(TeclaC, &AuxB.BC)) {
+    // Escreve no Display
+    escreve_data(atual, 0);
+
+    // Faz varredura nas teclas apertadas
+    verif_teclas();
+  }
+  //------Dia/Mes------
+}
+
+/* Função que emite sinal para buzzer */
+void Alarme_buzzer(){
+	if(Atual.MSegundo > 500){
+		for (tmp = 0; tmp < 6; tmp++)
+			amost = 0;
+		for (tmp = 6; tmp > 0; tmp--)
+			amost = 255;	
+	}
+}
+
 void main(void) {
 
+  /* Configura os pinos de entrada e saída (botão e LED) da P1
+    de acordo com o Kit */
   P1 = 0xF0;
 
-  // Inicializa o Timer para acionar interrupcao
-  InitTimer0();
+  /* Inicializa o Timer para acionar interrupcao */
+  InitTimer();
 
-  // Função para definição inicial
+  /* Chama a função para definir inicialmente o tempo */
   def(1, &Atual);
 
+  /* Seta todos os alarmes inicialmente como desativados (0 em todos os indices
+    do Alarme_en), e copia a data inicial definida para facilitar na hora de
+    configurara cada alarme. */
   for (char i = 0; i < MAX_ALARMS; i++) {
     Alarme[i] = Atual;
     Alarme_en[i] = 0;
@@ -643,24 +713,33 @@ void main(void) {
 
   while (1) {
 
-    // Verifica alarmes a cada minuto
+    /* Verifica alarmes a cada minuto */
     alarme_verif();
 
+    /* Variável que define tempo que ponto no display entre hora e minuto pisca.
+     */
     Pisca500ms = Atual.MSegundo > 500 ? 1 : 0;
+
+    /* Verifica se tem algum alarme tocando, se tiver pisca display */
     if (Alarme_tocando) {
       Ajuste[1] = Ajuste[2] = Ajuste[3] = Ajuste[4] = Pisca500ms;
+	Alarme_buzzer();
       if (Tecla0)
         Alarme_en[Alarme_tocando - 1] = 0;
     } else
       Ajuste[1] = Ajuste[2] = Ajuste[3] = Ajuste[4] = 1;
 
-    // Chama funcao que faz varredura nas teclas
+    /* Chama funcao que faz varredura nas teclas */
     verif_teclas();
 
-    if (TeclaA)
+    /* Verifica o acionamento das teclas para chamar as funções destinadas a
+     * cada uma */
+    if (Borda_Subida(TeclaA, &AuxB.BA))
       alarme();
-    else if (TeclaB)
+    else if (Borda_Subida(TeclaB, &AuxB.BB))
       def(2, &Atual);
+    else if (Borda_Subida(TeclaC, &AuxB.BC))
+      data(&Atual);
     else
       escreve_hora(&Atual);
   }
