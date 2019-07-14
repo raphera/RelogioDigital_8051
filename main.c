@@ -49,9 +49,12 @@
 #define TE 0x4000 // AD7 & ACH16 - CH16
 #define TD 0x8000 // AD7 & ACH17 - CH17
 
+
 /* Variáveis de controle do Buzzer */
 	__xdata unsigned int tmp;
 	unsigned char __far __at DAC amost;
+  __bit aux = 0;
+  unsigned char auxUs = 0;
 
 /* Variável utilizada para fazer o controle
   // de quantas vezes a função Timer0_ISR: foi
@@ -155,6 +158,8 @@ __bit TeclaC;
 __bit TeclaD;
 __bit TeclaE;
 __bit TeclaF;
+
+void Alarme_buzzer();
 
 /* Função implementada para atraso de máquina de acordo com argumento
   em ms (milissegundos) passado ao chamar função. */
@@ -268,8 +273,11 @@ void InitTimer(void) {
 
   TMOD = 0b00000010; // Setar Timer0 em modo 2 (recarrega valor inicial)
   PT0 = 1;    //Timer0 com prioridade alta
-  TH0 = 6; // Tempo de recarregar de 250us
-  TL0 = 6; // Valor de inicio
+
+  //Cliclo de maquina para 11,059Mhz: 1,085
+
+  TH0 = 20; // Tempo de recarregar de 250us
+  TL0 = 20; // Valor de inicio
 
   ET0 = 1; // Ativa as interrupcoes do Timer 0
   EA = 1;  // Ativa a interrupcao global
@@ -286,6 +294,11 @@ void Timer0_ISR(void) __interrupt 1 {
   {
     Relogio_upd(); // Chama a funcao que atualiza o tempo
     usecCounter = 0;
+  }
+  auxUs++;
+  if(auxUs == 4){
+    Alarme_buzzer();
+    auxUs = 0;
   }
 }
 
@@ -683,12 +696,16 @@ void data(struct Relogio *atual) {
 
 /* Função que emite sinal para buzzer */
 void Alarme_buzzer(){
+  /*
 	if(Atual.MSegundo > 500){
 		for (tmp = 0; tmp < 6; tmp++)
 			amost = 0;
 		for (tmp = 6; tmp > 0; tmp--)
 			amost = 255;	
 	}
+  */
+  aux = !aux;
+  amost = aux * 255;
 }
 
 void main(void) {
@@ -723,7 +740,7 @@ void main(void) {
     /* Verifica se tem algum alarme tocando, se tiver pisca display */
     if (Alarme_tocando) {
       Ajuste[1] = Ajuste[2] = Ajuste[3] = Ajuste[4] = Pisca500ms;
-	Alarme_buzzer();
+	    Alarme_buzzer();
       if (Tecla0)
         Alarme_en[Alarme_tocando - 1] = 0;
     } else
